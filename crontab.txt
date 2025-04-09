@@ -1,0 +1,1 @@
+@reboot /usr/bin/sleep 30; /home/cubesat/env/bin/pyhton3 /home/cubesat/transmit_telemetry.py 2>/home/cubesat/cronlog &
