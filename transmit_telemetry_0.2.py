@@ -61,7 +61,7 @@ height = display.height
 
 # Configure LoRa Radio
 tx_enable = False
-transmit_frequency = 10 # 60 seconds?
+transmit_frequency = 60 # 60 seconds?
 last_transmit = time.time()
 tx_freq = 915.0
 
@@ -78,10 +78,15 @@ CS = DigitalInOut(board.CE1)
 RESET = DigitalInOut(board.D25)
 spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 rfm9x = adafruit_rfm9x.RFM9x(spi, CS, RESET, tx_freq)
-rfm9x.tx_power = 5
+rfm9x.tx_power = 23
 prev_packet = None
 
 # LightAPRS
+
+# we need a long sleep to wait for bentley to be ready
+time.sleep(60)
+
+
 
 serial_port = '/dev/ttyUSB0'
 if not os.path.exists(serial_port):
@@ -93,6 +98,8 @@ serial_speed= 57600
 #time sleep 60 for convience, no specific reason for 60 seconds, could be more or less
 time.sleep(60)
 serial_connection = serial.Serial(serial_port, serial_speed)
+#serial_connection = serial.Serial(serial_port, serial_speed, timeout=0)
+
 lightAPRSData = {
     'gps': '',
     'txc': '',
@@ -130,16 +137,22 @@ while True:
 
     # get lightaprs stuff if possible
     #000/002/A=000407 001TxC  22.30C 1009.50hPa  4.54V 07S http://www.lightaprs.com
-    if serial_connection.in_waiting > 0:
-        tempData = serial_connection.readline().decode('utf-8').rstrip().split()
-        lightAPRSData['gps'] = tempData[0]
-        lightAPRSData['txc'] = tempData[1]
-        lightAPRSData['temp'] = tempData[2]
-        lightAPRSData['pressure'] = tempData[3]
-        lightAPRSData['power'] = tempData[4]
-        lightAPRSData['sat_valid'] = tempData[5]
-        #lightAPRSData = serial_connection.readline().decode('utf-8').rstrip().split()
-        print('lightAPRS data: ' + str(lightAPRSData))
+    try:
+        #data = serial_connection.read(serial_connection.in_waiting)
+        #if data:
+        if serial_connection.in_waiting > 0:
+            tempData = serial_connection.readline().decode('utf-8').rstrip().split()
+            lightAPRSData['gps'] = tempData[0]
+            lightAPRSData['txc'] = tempData[1]
+            lightAPRSData['temp'] = tempData[2]
+            lightAPRSData['pressure'] = tempData[3]
+            lightAPRSData['power'] = tempData[4]
+            lightAPRSData['sat_valid'] = tempData[5]
+            #lightAPRSData = serial_connection.readline().decode('utf-8').rstrip().split()
+            print('lightAPRS data: ' + str(lightAPRSData))
+#    except serial.SerialTimeoutException:
+    except:
+        print("No data received from LightAPRS within timeout.")
 
     if (time.time() - last_transmit) > (transmit_frequency / 5):
         with open('/home/cubesat/data_to_be_transmitted.csv', 'a+', newline = '') as open_csv_file:
