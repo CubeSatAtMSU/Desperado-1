@@ -3,6 +3,10 @@
 # for this first iteration we can use csv to transmit the data
 # and dump into excel.  in the future we should adhere to a
 # standard like CCSDS (Consultative Committee for Space Data Systems)
+# Stuff for backup added by Steven Coltharp, important links for it below
+# Documentation - https://cdn-learn.adafruit.com/downloads/pdf/adafruit-mini-gps-pa1010d-module.pdf
+# Library info - https://docs.circuitpython.org/projects/gps/en/latest/api.html#
+
 
 # csv example
 # timestamp,cubesat_id,battery_voltage,gps_latitude,gps_longitude,altitude,temperature
@@ -31,6 +35,9 @@ import json
 import smbus
 import serial
 import csv
+
+#S - Library
+import adafruit_gps
 
 # Button A
 #btnA = DigitalInOut(board.D5)
@@ -80,6 +87,11 @@ spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 rfm9x = adafruit_rfm9x.RFM9x(spi, CS, RESET, tx_freq)
 rfm9x.tx_power = 23
 prev_packet = None
+
+# S - Setup GPS
+gps = adafruit_gps.GPS_GtopI2C(i2c, debug=False) # Establish the GPS and I2C interface
+gps.send_command(b"PMTK314, 0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0") # Establish what you want to be sent (GGA and RMC info)
+gps.send_command("bPMTK220,1000") # Set update rate ( currently 1  ) 
 
 # LightAPRS
 
@@ -153,8 +165,17 @@ while True:
 #    except serial.SerialTimeoutException:
     except:
         print("No data received from LightAPRS within timeout.")
+        
+        # S - check if GPS has a connection to sat.
+    if not gps.has_fix:
+           print('Waiting for fix...')
+           continue
+       print("Fix found!") # Might be unnecesary?
+
 
     if (time.time() - last_transmit) > (transmit_frequency / 5):
+
+        
         with open('/home/cubesat/data_to_be_transmitted.csv', 'a+', newline = '') as open_csv_file:
            csv_file = csv.writer(open_csv_file) 
            csv_file.writerow([str(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
@@ -166,7 +187,12 @@ while True:
          str(lightAPRSData["temp"]),
          str(lightAPRSData["pressure"]),
          str(lightAPRSData["power"]),
-         str(lightAPRSData["sat_valid"])])
+         str(lightAPRSData["sat_valid"])
+         # S - write gps data to csv
+         str(gps.latitude)
+         str(gps.longitude)
+         str(altitude_m)])  
+    
 
     # transmit telemetry data 
     if (time.time() - last_transmit) > transmit_frequency:
@@ -180,7 +206,11 @@ while True:
         ',' + str(lightAPRSData["temp"]) + 
         ',' + str(lightAPRSData["pressure"]) + 
         ',' + str(lightAPRSData["power"]) + 
-        ',' + str(lightAPRSData["sat_valid"]))
+        ',' + str(lightAPRSData["sat_valid"])
+        # S - write GPS data to be sent
+        ',' + str(gps.latitude) +
+        ',' + str(gps.longitude)
+        ',' + str(gps.altitude_m))
 
         print('tx_string: ' + tx_string)
         rfm9x.send(bytes(tx_string,"utf-8"))
